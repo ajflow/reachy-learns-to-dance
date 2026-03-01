@@ -1,8 +1,8 @@
-"""Reachy Mini DJ: Listens to music and dances along.
+"""Reachy Mini DJ: AI-choreographed dancing robot.
 
-Uses audio analysis for BPM detection and mood estimation,
-the reachy_mini_dances_library for smooth dance moves,
-and a web dashboard showing how the robot interprets the music.
+Listens to live music, analyzes audio in real-time, and uses
+Mistral AI as a dance choreographer via function calling.
+The AI actively decides moves, mood, energy, and timing.
 """
 
 import json
@@ -17,7 +17,7 @@ from reachy_mini_dances_library.collection.dance import AVAILABLE_MOVES
 from .audio_engine import AudioEngine
 from .mistral_brain import MistralBrain
 
-# Moves grouped by mood
+# Fallback mood pools (used when AI hasn't queued a specific move)
 MOOD_MOVES = {
     "chill": ["simple_nod", "head_tilt_roll", "side_to_side_sway", "chin_lead", "pendulum_swing"],
     "happy": ["yeah_nod", "uh_huh_tilt", "chicken_peck", "side_peekaboo", "groovy_sway_and_roll", "side_to_side_sway"],
@@ -44,7 +44,7 @@ def set_state(**kwargs):
 
 
 class ReachyMiniDJ(ReachyMiniApp):
-    """Listens to music, detects BPM and mood, dances with style."""
+    """AI-choreographed dancing robot powered by Mistral."""
 
     custom_app_url: str | None = "http://localhost:8001"
 
@@ -53,7 +53,7 @@ class ReachyMiniDJ(ReachyMiniApp):
         audio = AudioEngine(device=2)
         audio.start()
 
-        # Mistral AI brain for mood classification
+        # Mistral AI choreographer (function calling)
         mistral = MistralBrain()
 
         # Web dashboard
@@ -75,6 +75,7 @@ class ReachyMiniDJ(ReachyMiniApp):
             is_dancing=False,
             current_move="none",
             move_history=[],
+            ai_log=[],
         )
 
         control_ts = 0.01  # 100Hz
@@ -97,15 +98,30 @@ class ReachyMiniDJ(ReachyMiniApp):
                         t_beats = 0.0
                         sequence_beat_counter = 0.0
                         current_move_name, move_fn, move_params = self._pick_move(
-                            audio.mood, current_move_name
+                            "happy", current_move_name
                         )
                         move_history = [current_move_name]
 
-                    # Consult Mistral AI for mood
+                    # Consult Mistral AI choreographer
                     ai_state = mistral.analyze(audio_state)
                     mood = ai_state["mood"]
 
-                    # Scale amplitude with energy + AI suggestion
+                    # Check if AI queued a specific move
+                    queued = ai_state.get("queued_move")
+                    if queued and queued in AVAILABLE_MOVES:
+                        current_move_name = queued
+                        move_fn, move_params, move_meta = AVAILABLE_MOVES[queued]
+                        sequence_beat_counter = 0.0
+                        move_history.append(current_move_name)
+                        if len(move_history) > 20:
+                            move_history.pop(0)
+
+                    # Use AI's beats_per_sequence if set
+                    ai_bps = ai_state.get("beats_per_sequence")
+                    if ai_bps:
+                        beats_per_sequence = ai_bps
+
+                    # Scale amplitude with energy + AI direction
                     amplitude_scale = min(1.0, 0.4 + audio.energy_level * 0.6) * ai_state["energy_scale"]
 
                     # Advance beat counter using detected BPM
@@ -114,7 +130,7 @@ class ReachyMiniDJ(ReachyMiniApp):
                     t_beats += beats_this_frame
                     sequence_beat_counter += beats_this_frame
 
-                    # Switch move every N beats
+                    # Switch move every N beats (if AI hasn't already queued one)
                     if sequence_beat_counter >= beats_per_sequence:
                         sequence_beat_counter = 0.0
                         current_move_name, move_fn, move_params = self._pick_move(
@@ -143,7 +159,7 @@ class ReachyMiniDJ(ReachyMiniApp):
                         antennas=final_ant,
                     )
 
-                    # Update dashboard
+                    # Update dashboard state
                     set_state(
                         is_dancing=True,
                         current_move=current_move_name,
@@ -152,6 +168,9 @@ class ReachyMiniDJ(ReachyMiniApp):
                         ai_mood=ai_state["mood"],
                         ai_reason=ai_state["reason"],
                         ai_enabled=ai_state["ai_enabled"],
+                        ai_log=ai_state.get("ai_log", []),
+                        ai_call_count=ai_state.get("call_count", 0),
+                        beats_per_sequence=beats_per_sequence,
                         **audio_state,
                     )
 
@@ -159,7 +178,12 @@ class ReachyMiniDJ(ReachyMiniApp):
                     silence_timer += dt
                     if dancing and silence_timer > 2.0:
                         dancing = False
-                        set_state(is_dancing=False, current_move="none", **audio_state)
+                        set_state(
+                            is_dancing=False,
+                            current_move="none",
+                            ai_log=mistral.ai_log if hasattr(mistral, 'ai_log') else [],
+                            **audio_state,
+                        )
                     else:
                         set_state(**audio_state)
 
@@ -169,7 +193,7 @@ class ReachyMiniDJ(ReachyMiniApp):
             audio.stop()
 
     def _pick_move(self, mood, current_name):
-        """Pick a new move appropriate for the mood."""
+        """Pick a new move appropriate for the mood (fallback when AI hasn't queued one)."""
         pool = MOOD_MOVES.get(mood, MOOD_MOVES["happy"])
         candidates = [m for m in pool if m != current_name and m in AVAILABLE_MOVES]
         if not candidates:
@@ -183,7 +207,6 @@ class ReachyMiniDJ(ReachyMiniApp):
         import http.server
         import os
         import socket
-        import socketserver
 
         static_dir = os.path.join(os.path.dirname(__file__), "static")
 
@@ -213,6 +236,7 @@ class ReachyMiniDJ(ReachyMiniApp):
         server.socket = sock
         print("Dashboard running on 0.0.0.0:8001", flush=True)
         server.serve_forever()
+
 
 if __name__ == "__main__":
     app = ReachyMiniDJ()
