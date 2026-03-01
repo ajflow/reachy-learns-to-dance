@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reachy_mini_dj"
+version = "0.1.0"
+description = "AI DJ that listens to music and dances to the beat using Mistral AI"
+requires-python = ">=3.10"
+dependencies = [
+    "reachy_mini",
+    "reachy_mini_dances_library",
+    "numpy",
+    "sounddevice",
+]
+
+[project.entry-points.reachy_mini_apps]
+reachy_mini_dj = "reachy_mini_dj.main:ReachyMiniDJ"

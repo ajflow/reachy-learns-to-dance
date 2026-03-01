@@ -1,174 +1,139 @@
-# Reachy Learns to Dance 🤖🕺
+# Reachy Learns to Dance 🤖🎶
 
-### Teach a robot to dance from any TikTok video in under 60 seconds
+A HuggingFace Reachy Mini App that listens to live music through the robot's built-in microphone and dances in real-time, with Mistral AI choosing the dance style based on what it hears.
 
-> **Built for the [Mistral AI Worldwide Hackathon 2026](https://mistral.ai)**
-> 
-> An AI agent skill that watches humans dance on TikTok, understands the choreography using computer vision, and replays it on a real robot — a [Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) by Pollen Robotics.
+**Built for the Mistral Worldwide Hackathon 2026** | Track 2: Anything Goes
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Mistral_AI-Hackathon_2026-orange?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python&logoColor=white" />
-  <img src="https://img.shields.io/badge/MediaPipe-Pose-green?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Reachy_Mini-Robot-red?style=for-the-badge" />
-</p>
+## What It Does
 
----
+1. **Listens** to ambient music through the Reachy Mini's built-in microphone
+2. **Analyzes** audio in real-time: BPM detection, energy tracking, spectral mood estimation
+3. **Asks Mistral AI** every 8 seconds: "What kind of music is this? How should I dance?"
+4. **Dances** using 20 professional moves from the `reachy_mini_dances_library`, matched to the mood Mistral detects
+5. **Shows its thinking** on a live web dashboard: waveform, BPM, mood, spectral analysis, move history
 
-## 🎬 Demo
+Zero configuration. Turn it on, play music, watch it groove.
 
-> *Video coming soon — watch Reachy Mini bust a move!*
+## How Mistral AI Fits In
 
-https://github.com/user-attachments/assets/placeholder
+The robot's audio engine extracts features (BPM, energy, spectral centroid, bass/treble ratio) and sends them to **Mistral Small** every 8 seconds. Mistral classifies the music into one of four moods:
 
----
+| Mood | When Mistral Picks It | Dance Style |
+|------|----------------------|-------------|
+| Chill | Slow tempo, ambient, jazz, lo-fi | Gentle nods, soft swaying |
+| Happy | Pop, dance, upbeat rhythms | Bouncy, playful movements |
+| Intense | Rock, EDM, fast beats | Sharp, powerful moves |
+| Funky | R&B, soul, groove-heavy bass | Rhythmic, groovy patterns |
 
-## 💡 How It Works
+Mistral also sets an `energy_scale` (0.3 to 1.0) controlling how big the movements are. The AI runs in a background thread so it never blocks the 100Hz dance loop.
+
+Without a Mistral API key, the app falls back to spectral-based mood detection. With Mistral, the classifications are dramatically better because it understands musical context, not just frequency distributions.
+
+## The "Agent With Taste" Angle
+
+This entire project was built by an AI agent (Flowbee, running on OpenClaw) controlling the robot remotely over SSH. The agent:
+
+- Extracted 3,642 dance moves from 10 TikTok videos to learn vocabulary
+- Discovered the correct microphone device by testing each one
+- Figured out the undocumented API fields through trial and error
+- Built the audio engine, Mistral integration, web dashboard, and HuggingFace packaging
+- Deployed and tested on the physical robot via reverse SSH tunnel from an AWS VPS
+
+An AI agent that builds a dancing robot that uses AI to pick its dance moves. It's AI all the way down.
+
+## Architecture
 
 ```
-┌──────────────┐     ┌──────────────────┐     ┌─────────────────┐     ┌──────────────┐
-│   TikTok     │────▶│  MediaPipe Pose   │────▶│  Joint Mapping  │────▶│  Reachy Mini │
-│   Video      │     │  Extraction       │     │  & Smoothing    │     │  Playback    │
-│              │     │                   │     │                 │     │              │
-│  Download    │     │  33 body landmarks │     │  Head → Head    │     │  REST API    │
-│  via tikwm   │     │  per frame @10fps │     │  Torso → Body   │     │  WiFi control│
-│              │     │                   │     │  Arms → Antennas│     │              │
-└──────────────┘     └──────────────────┘     └─────────────────┘     └──────────────┘
-                                                       │
-                                                       ▼
-                                              ┌─────────────────┐
-                                              │   Mistral AI    │
-                                              │                 │
-                                              │  Dance analysis │
-                                              │  Beat detection │
-                                              │  Choreography   │
-                                              │  generation     │
-                                              └─────────────────┘
+┌─────────────────────────────────────────────────┐
+│                  Reachy Mini                     │
+│                                                  │
+│  ┌──────────┐   ┌──────────┐   ┌──────────────┐ │
+│  │ Built-in │──>│  Audio   │──>│  Dance Loop  │ │
+│  │   Mic    │   │  Engine  │   │   (100Hz)    │ │
+│  └──────────┘   └────┬─────┘   └──────┬───────┘ │
+│                      │                │          │
+│                      v                v          │
+│               ┌──────────┐    ┌──────────────┐   │
+│               │ Mistral  │    │  20 Pro      │   │
+│               │  Brain   │    │  Dance Moves │   │
+│               │ (8s poll)│    │  (library)   │   │
+│               └──────────┘    └──────────────┘   │
+│                                                  │
+│  ┌──────────────────────────────────────────┐    │
+│  │  Web Dashboard (port 8001)               │    │
+│  │  Waveform | BPM | Mood | Spectral | Moves│    │
+│  └──────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────┘
+                      │
+                      v (every 8s)
+              ┌──────────────┐
+              │  Mistral AI  │
+              │  (Small)     │
+              │  api.mistral │
+              └──────────────┘
 ```
 
-### The Pipeline
+## Installation
 
-1. **📥 Download** — Grab any TikTok video by URL (via tikwm.com API)
-2. **🔍 Pose Extraction** — MediaPipe Pose Landmarker detects 33 body keypoints per frame
-3. **🎯 Joint Mapping** — Human skeleton maps to Reachy Mini's degrees of freedom:
-   - **Head position** → Head yaw, pitch, roll
-   - **Torso rotation** → Body yaw
-   - **Arm raises** → Antenna angles
-4. **🧹 Smoothing** — Moving average filter removes jitter from noisy pose data
-5. **🎵 BPM Detection** — Estimates music tempo from motion oscillation frequency
-6. **🤖 Playback** — Sends choreography as timed REST API calls to the robot
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Python 3.10+
-- A [Reachy Mini](https://www.pollen-robotics.com/reachy-mini/) robot on your local network
-- ~30MB disk space for the pose model (auto-downloads on first run)
-
-### Install
+This is a standard HuggingFace Reachy Mini App. Install it on your robot:
 
 ```bash
+# SSH into your Reachy Mini
+ssh pollen@reachy-mini.local
+
+# Clone and install
 git clone https://github.com/ajflow/reachy-learns-to-dance.git
 cd reachy-learns-to-dance
-pip install -r requirements.txt
+pip install -e .
+
+# Set your Mistral API key (optional but recommended)
+echo 'export MISTRAL_API_KEY=your-key-here' >> ~/.bashrc
+
+# Toggle ON from the Reachy Mini dashboard/mobile app
 ```
 
-### Usage
+The app appears in your Reachy Mini dashboard's Applications list. Toggle it ON, play some music, and watch it dance.
 
-```bash
-# 1. Extract dance from a TikTok video
-python scripts/tiktok-to-dance.py --url "https://www.tiktok.com/@charlidamelio/video/123" --preview
+## Configuration
 
-# 2. Play it on your robot!
-python scripts/reachy-dance.py --choreo dance_choreo.json
+**None required.** The app auto-detects the microphone, estimates BPM from onset detection, and picks moves that match the mood.
 
-# From a local video file with amplified moves
-python scripts/tiktok-to-dance.py --file dance.mp4 --amplify 1.5 --output my_dance.json
+Optional: Set `MISTRAL_API_KEY` environment variable for AI-powered mood classification instead of spectral heuristics.
 
-# Or use the 7 built-in dances
-python scripts/reachy-dance.py --dance disco --bpm 120 --duration 15
-python scripts/reachy-dance.py --list  # See all options
-```
+## Web Dashboard
 
-### Configuration
+When the app is running, visit `http://reachy-mini.local:8001` to see:
 
-Set your robot's address:
-```bash
-export REACHY_HOST=192.168.1.42  # or reachy-mini.local
-```
+- **Real-time waveform** of what the mic picks up
+- **Volume meter** with peak tracking
+- **BPM display** with confidence percentage
+- **Auto-detected mood badge** (chill/happy/intense/funky)
+- **Spectral analysis bars** (bass/mids/treble)
+- **Current dance move** being executed
+- **Move history** timeline
+- **Mistral AI status** showing its mood reasoning
 
----
+## How the Audio Engine Works
 
-## 🛠 Tech Stack
+- **Onset detection**: Energy-ratio based (1.5x average = beat), debounced at 150ms
+- **BPM estimation**: Histogram-based clustering of onset intervals, updated every 2 seconds
+- **Spectral mood**: FFT-based analysis of bass (<300Hz), mids (300-2000Hz), treble (>2000Hz)
+- **Energy tracking**: Smoothed volume with peak tracking, mapped to movement amplitude
+- **Silence detection**: Threshold-based (0.012 RMS), robot goes idle after 2 seconds of silence
 
-| Component | Technology |
-|-----------|-----------|
-| **Pose Extraction** | [MediaPipe Pose Landmarker](https://developers.google.com/mediapipe/solutions/vision/pose_landmarker) (Heavy model) |
-| **Video Processing** | OpenCV |
-| **AI Analysis** | [Mistral AI](https://mistral.ai) — dance style analysis & choreography generation |
-| **Robot Control** | Reachy Mini REST API over WiFi |
-| **Language** | Python 3.10+ |
-| **Math** | NumPy — joint angle calculations & signal smoothing |
+## Tech Stack
 
----
+- **Robot**: Reachy Mini by Pollen Robotics (HuggingFace)
+- **AI**: Mistral Small via Mistral AI API
+- **Audio**: sounddevice + numpy FFT (no heavy ML dependencies)
+- **Moves**: reachy_mini_dances_library v0.2.1 (20 professional moves)
+- **Dashboard**: Vanilla HTML/CSS/JS, no build step
+- **Packaging**: Standard Python package with HuggingFace Reachy Mini entry points
 
-## 📁 Project Structure
+## License
 
-```
-reachy-learns-to-dance/
-├── scripts/
-│   ├── tiktok-to-dance.py    # TikTok → choreography pipeline
-│   ├── reachy-dance.py        # Dance player + 7 built-in routines
-│   ├── reachy-control.py      # Low-level robot control
-│   └── setup-tunnel.sh        # Network tunnel helper
-├── references/
-│   └── api-reference.md       # Reachy Mini API docs
-├── requirements.txt
-├── LICENSE
-└── README.md
-```
+MIT
 
----
+## Credits
 
-## 🎯 What Makes This Special
-
-- **Zero choreography skills needed** — point it at any dance video and the robot learns
-- **Under 60 seconds** end-to-end: download → extract → map → dance
-- **Works with any human dance video** — TikTok, local files, webcam recordings
-- **Motion amplification** — subtle human moves become expressive robot gestures
-- **BPM-aware** — automatically syncs to the music's tempo
-- **7 built-in dances** as fallbacks: disco, headbang, groovy, chicken, robot, celebrate, nod-along
-
----
-
-## 🏗 Built With
-
-This project was built as an [OpenClaw](https://openclaw.ai) AI agent skill — meaning an AI agent can autonomously:
-1. Receive a TikTok URL from a user
-2. Run the full pipeline
-3. Make the robot dance
-4. All through natural language conversation
-
----
-
-## 👤 Team
-
-**AJ Awan** — [Flowtivity](https://flowtivity.ai)
-- AI consultant & builder
-- Previously EY Manager, IT Advisory
-- TOGAF 9 certified enterprise architect
-
----
-
-## 📄 License
-
-MIT — see [LICENSE](LICENSE)
-
----
-
-<p align="center">
-  <b>Built with ❤️ and 🤖 for the Mistral AI Worldwide Hackathon 2026</b>
-</p>
+Built by AJ Awan ([Flowtivity](https://flowtivity.ai)) and Flowbee (AI agent) for the Mistral Worldwide Hackathon 2026.

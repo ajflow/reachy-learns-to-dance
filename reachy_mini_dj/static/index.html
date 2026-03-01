@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reachy Mini DJ</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5em;
+            background: linear-gradient(135deg, #ff6b6b, #ffd93d, #6bcb77, #4d96ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 4px;
+        }
+        .subtitle { text-align: center; color: #666; margin-bottom: 25px; }
+
+        .grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+        .card {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 15px;
+            text-align: center;
+        }
+        .card .label { font-size: 0.7em; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+        .card .value { font-size: 1.8em; font-weight: bold; margin-top: 4px; }
+        .card .sub { font-size: 0.7em; color: #555; margin-top: 2px; }
+
+        .section {
+            background: #1a1a2e;
+            border-radius: 14px;
+            padding: 18px;
+            margin-bottom: 16px;
+        }
+        .section-title {
+            font-size: 0.75em;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 12px;
+        }
+
+        canvas#waveform { width: 100%; height: 100px; display: block; border-radius: 8px; background: #12121f; }
+
+        .meter { height: 24px; background: #12121f; border-radius: 12px; overflow: hidden; position: relative; }
+        .meter-fill { height: 100%; border-radius: 12px; transition: width 0.1s; }
+        .meter-mark { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.2); }
+
+        .move-hero { text-align: center; padding: 20px 0; }
+        .move-name {
+            font-size: 2.2em;
+            font-weight: 800;
+            letter-spacing: 1px;
+            transition: all 0.3s;
+        }
+        .move-name.dancing { color: #ffd93d; }
+        .move-name.idle { color: #222; font-size: 1.4em; }
+
+        .mood-badge {
+            display: inline-block;
+            padding: 6px 18px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-top: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .mood-happy { background: rgba(107,203,119,0.15); color: #6bcb77; border: 1px solid rgba(107,203,119,0.3); }
+        .mood-chill { background: rgba(77,150,255,0.15); color: #4d96ff; border: 1px solid rgba(77,150,255,0.3); }
+        .mood-intense { background: rgba(255,107,107,0.15); color: #ff6b6b; border: 1px solid rgba(255,107,107,0.3); }
+        .mood-funky { background: rgba(255,217,61,0.15); color: #ffd93d; border: 1px solid rgba(255,217,61,0.3); }
+
+        .history { display: flex; flex-wrap: wrap; gap: 5px; }
+        .htag {
+            padding: 3px 10px;
+            background: #12121f;
+            border-radius: 10px;
+            font-size: 0.7em;
+            color: #555;
+        }
+        .htag:last-child { color: #ffd93d; background: rgba(255,217,61,0.1); }
+
+        .status-dot {
+            display: inline-block;
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+        .status-dot.on { background: #6bcb77; box-shadow: 0 0 8px #6bcb77; animation: pulse 1s infinite; }
+        .status-dot.off { background: #333; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        .spectral-bars {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+            height: 50px;
+            margin-top: 10px;
+        }
+        .sbar {
+            flex: 1;
+            border-radius: 4px 4px 0 0;
+            min-height: 3px;
+            transition: height 0.15s;
+        }
+        .sbar-low { background: #ff6b6b; }
+        .sbar-mid { background: #ffd93d; }
+        .sbar-high { background: #4d96ff; }
+        .sbar-labels { display: flex; gap: 8px; margin-top: 4px; }
+        .sbar-labels span { flex: 1; text-align: center; font-size: 0.65em; color: #444; }
+
+        .footer { text-align: center; margin-top: 16px; color: #333; font-size: 0.75em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Reachy Mini DJ</h1>
+        <p class="subtitle">Listening to music. Dancing to the beat.</p>
+
+        <div class="grid">
+            <div class="card">
+                <div class="label">Status</div>
+                <div class="value" id="status"><span class="status-dot off"></span>Idle</div>
+            </div>
+            <div class="card">
+                <div class="label">BPM</div>
+                <div class="value" id="bpm" style="color:#4d96ff">--</div>
+                <div class="sub" id="bpmConf">detecting...</div>
+            </div>
+            <div class="card">
+                <div class="label">Beats</div>
+                <div class="value" id="beats" style="color:#ffd93d">0</div>
+            </div>
+            <div class="card">
+                <div class="label">Energy</div>
+                <div class="value" id="energy" style="color:#ff6b6b">0%</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Audio Input</div>
+            <canvas id="waveform"></canvas>
+            <div style="margin-top: 12px;">
+                <div class="meter">
+                    <div class="meter-fill" id="volFill" style="width:0%; background: linear-gradient(90deg, #4d96ff, #6bcb77, #ffd93d, #ff6b6b);"></div>
+                    <div class="meter-mark" style="left: 2.4%"></div>
+                </div>
+            </div>
+            <div class="spectral-bars">
+                <div class="sbar sbar-low" id="sLow" style="height: 3px;"></div>
+                <div class="sbar sbar-mid" id="sMid" style="height: 3px;"></div>
+                <div class="sbar sbar-high" id="sHigh" style="height: 3px;"></div>
+            </div>
+            <div class="sbar-labels"><span>Bass</span><span>Mids</span><span>Treble</span></div>
+        </div>
+
+        <div class="section move-hero">
+            <div class="section-title">Current Move</div>
+            <div class="move-name idle" id="moveName">Waiting for music...</div>
+            <div id="moodBadge" class="mood-badge mood-happy" style="display:none">happy</div>
+            <div id="aiReason" style="margin-top:8px;color:#555;font-size:0.85em;font-style:italic"></div>
+            <div id="aiLabel" style="margin-top:4px;font-size:0.65em;color:#333;letter-spacing:1px">POWERED BY MISTRAL AI</div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Move History</div>
+            <div class="history" id="history"></div>
+        </div>
+
+        <div class="footer">
+            Reachy Mini DJ &mdash; Mistral Worldwide Hacks 2026
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('waveform');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = canvas.offsetWidth * 2;
+            canvas.height = canvas.offsetHeight * 2;
+            ctx.scale(2, 2);
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        function drawWaveform(vols) {
+            const w = canvas.offsetWidth, h = canvas.offsetHeight;
+            ctx.clearRect(0, 0, w, h);
+            if (!vols || !vols.length) return;
+
+            const bw = w / vols.length;
+            const grad = ctx.createLinearGradient(0, h, 0, 0);
+            grad.addColorStop(0, 'rgba(77,150,255,0.6)');
+            grad.addColorStop(0.5, 'rgba(107,203,119,0.7)');
+            grad.addColorStop(0.8, 'rgba(255,217,61,0.8)');
+            grad.addColorStop(1, 'rgba(255,107,107,0.9)');
+            ctx.fillStyle = grad;
+
+            for (let i = 0; i < vols.length; i++) {
+                const v = Math.min(vols[i] * 3, 1);
+                const bh = v * h;
+                // Mirror effect
+                ctx.fillRect(i * bw, h/2 - bh/2, bw - 1, bh);
+            }
+        }
+
+        async function poll() {
+            try {
+                const r = await fetch('/api/state');
+                const s = await r.json();
+
+                // Status
+                const st = document.getElementById('status');
+                if (s.is_dancing) {
+                    st.innerHTML = '<span class="status-dot on"></span>Dancing';
+                } else if (s.has_music) {
+                    st.innerHTML = '<span class="status-dot on"></span>Listening';
+                } else {
+                    st.innerHTML = '<span class="status-dot off"></span>Idle';
+                }
+
+                // BPM
+                const bpmEl = document.getElementById('bpm');
+                const confEl = document.getElementById('bpmConf');
+                if (s.bpm && s.has_music) {
+                    bpmEl.textContent = s.bpm;
+                    const conf = Math.round((s.bpm_confidence || 0) * 100);
+                    confEl.textContent = conf + '% confidence';
+                } else {
+                    bpmEl.textContent = '--';
+                    confEl.textContent = 'detecting...';
+                }
+
+                // Beats & energy
+                document.getElementById('beats').textContent = s.beat_count || 0;
+                document.getElementById('energy').textContent = Math.round((s.energy_level || 0) * 100) + '%';
+
+                // Volume meter
+                document.getElementById('volFill').style.width = Math.min((s.volume || 0) * 250, 100) + '%';
+
+                // Waveform
+                drawWaveform(s.volume_history);
+
+                // Spectral bars (normalized to 50px max)
+                const maxSpec = Math.max(s.spectral_energy_low || 1, s.spectral_energy_high || 1, 1);
+                const norm = 45 / maxSpec;
+                document.getElementById('sLow').style.height = Math.max(3, (s.spectral_energy_low || 0) * norm) + 'px';
+                document.getElementById('sMid').style.height = Math.max(3, ((s.spectral_energy_low || 0) + (s.spectral_energy_high || 0)) / 2 * norm) + 'px';
+                document.getElementById('sHigh').style.height = Math.max(3, (s.spectral_energy_high || 0) * norm) + 'px';
+
+                // Move name
+                const mn = document.getElementById('moveName');
+                if (s.is_dancing && s.current_move && s.current_move !== 'none') {
+                    mn.textContent = s.current_move.replace(/_/g, ' ');
+                    mn.className = 'move-name dancing';
+                } else {
+                    mn.textContent = 'Waiting for music...';
+                    mn.className = 'move-name idle';
+                }
+
+                // Mood badge (prefer AI mood)
+                const mb = document.getElementById('moodBadge');
+                const aiReason = document.getElementById('aiReason');
+                const aiLabel = document.getElementById('aiLabel');
+                const displayMood = s.ai_mood || s.mood;
+                if (s.is_dancing && displayMood) {
+                    mb.textContent = displayMood;
+                    mb.className = 'mood-badge mood-' + displayMood;
+                    mb.style.display = 'inline-block';
+                    aiReason.textContent = s.ai_reason || '';
+                    aiLabel.style.display = s.ai_enabled ? 'block' : 'none';
+                } else {
+                    mb.style.display = 'none';
+                    aiReason.textContent = '';
+                    aiLabel.style.display = 'none';
+                }
+
+                // History
+                const hEl = document.getElementById('history');
+                hEl.innerHTML = (s.move_history || []).map(m =>
+                    '<span class="htag">' + m.replace(/_/g, ' ') + '</span>'
+                ).join('');
+
+            } catch(e) {}
+        }
+
+        setInterval(poll, 100);
+    </script>
+</body>
+</html>
