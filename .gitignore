@@ -1,0 +1,31 @@
+# MediaPipe pose model (~30MB) - download automatically on first run
+# Or manually: https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task
+scripts/pose_landmarker.task
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Choreography outputs
+*.json
+!package.json
+
+# Credentials
+.credentials/
+*.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Video files
+*.mp4
+*.avi
+*.mov
+*.mkv
