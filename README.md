@@ -130,10 +130,35 @@ When the app is running, visit `http://reachy-mini.local:8001` to see:
 - **Dashboard**: Vanilla HTML/CSS/JS, no build step
 - **Packaging**: Standard Python package with HuggingFace Reachy Mini entry points
 
+## Project Structure
+
+```
+reachy-learns-to-dance/
+├── reachy_mini_dj/           # The HuggingFace Reachy Mini App
+│   ├── main.py               # Dance loop + ReachyMiniDJ app class
+│   ├── audio_engine.py       # Real-time audio analysis (BPM, mood, energy)
+│   ├── mistral_brain.py      # Mistral AI mood classification
+│   ├── static/index.html     # Live web dashboard
+│   ├── __main__.py           # Module entry point
+│   └── __init__.py
+├── data/tiktok-dances/       # 3,642 keyframes from 10 TikTok videos
+├── scripts/                  # Dev utilities (remote control, TikTok extraction)
+├── docs/
+│   ├── architecture.md       # System design and component details
+│   └── how-it-was-built.md   # The story of an AI agent building a dancing robot
+├── pyproject.toml            # Package config with HuggingFace entry points
+└── README.md
+```
+
+## Documentation
+
+- [Architecture](docs/architecture.md): System design, component details, mood-to-move mapping
+- [How It Was Built](docs/how-it-was-built.md): The story of an AI agent building this project remotely over SSH
+
 ## License
 
 MIT
 
 ## Credits
 
-Built by AJ Awan ([Flowtivity](https://flowtivity.ai)) and Flowbee (AI agent) for the Mistral Worldwide Hackathon 2026.
+Built by AJ Awan ([Flowtivity](https://flowtivity.ai)) and Flowbee (AI agent running on [OpenClaw](https://github.com/openclaw/openclaw)) for the Mistral Worldwide Hackathon 2026.
