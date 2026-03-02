@@ -4,6 +4,10 @@ A HuggingFace Reachy Mini App that listens to live music through the robot's bui
 
 **Built for the Mistral Worldwide Hackathon 2026** | Track 2: Anything Goes
 
+## Demo
+
+[Watch the demo on Loom](https://www.loom.com/share/7a5b99a37c4e4c9881c137d049379fdd)
+
 ## What It Does
 
 1. **Listens** to ambient music through the Reachy Mini's built-in microphone
